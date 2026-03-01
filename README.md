@@ -1,4 +1,4 @@
-# 🎓 UniChoice: Smart Career Orientation Platform
+# 🎓 Choice4Future: Smart Career Orientation Platform
 
 **UniChoice** è una soluzione tecnologica avanzata progettata per guidare gli studenti nel delicato passaggio verso l'istruzione post-scolastica. Attraverso l'uso del **Machine Learning**, la piattaforma analizza attitudini, competenze e stati emotivi per offrire un orientamento personalizzato, consapevole e basato sui dati.
 
