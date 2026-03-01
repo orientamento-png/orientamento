@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import joblib
 import pandas as pd
@@ -16,6 +16,7 @@ app.add_middleware(
 
 model = joblib.load("modello_rafinato.pkl")
 
+# Modello per i dati reali del form
 class FormData(BaseModel):
     eta: int
     punteggio_mat: int
@@ -27,18 +28,31 @@ def root():
     return {"status": "API attiva", "model": "rafinato"}
 
 @app.post("/predict")
-def predict(data: FormData):
+async def predict(request: Request):  # ← Usa Request invece di FormData fisso
     try:
-        df_input = pd.DataFrame([data.dict()])
+        data = await request.json()  # prendi il JSON raw
+        print("Dati ricevuti:", data)  # logga sempre (utile su Render)
+
+        # Se è il test di Forminator → restituisci subito OK senza validare
+        if not data or len(data) < 3:  # payload vuoto o molto piccolo → è il test
+            return {"status": "test_ok", "message": "Webhook test ricevuto correttamente"}
+
+        # Altrimenti prova a validare come FormData reale
+        try:
+            validated = FormData(**data)
+        except Exception as e:
+            raise HTTPException(422, f"Dati non validi: {str(e)}")
+
+        df_input = pd.DataFrame([validated.dict()])
         pred = model.predict(df_input)[0]
-        
+
         aree = {0: "scientifico", 1: "umanistico", 2: "tecnico"}
         area_text = aree.get(pred, "indefinita")
-        
-        livello = "alto" if data.punteggio_mat >= 8 else "medio" if data.punteggio_mat >= 5 else "da esplorare"
-        
+
+        livello = "alto" if validated.punteggio_mat >= 8 else "medio" if validated.punteggio_mat >= 5 else "da esplorare"
+
         consiglio = f"Ti consigliamo **{area_text.upper()}**! "
-        if data.paura == 1:
+        if validated.paura == 1:
             consiglio += "Parla con un prof per chiarirti le idee."
         else:
             consiglio += "Hai già un buon orientamento!"
@@ -48,5 +62,7 @@ def predict(data: FormData):
             "livello_orientamento": livello,
             "consiglio": consiglio
         }
+
     except Exception as e:
+        print("Errore:", str(e))  # logga l'errore
         raise HTTPException(500, str(e))
