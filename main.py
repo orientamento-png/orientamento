@@ -28,20 +28,30 @@ def root():
     return {"status": "API attiva", "model": "rafinato"}
 
 @app.post("/predict")
-async def predict(request: Request):  # ← Usa Request invece di FormData fisso
+async def predict(request: Request):
     try:
-        data = await request.json()  # prendi il JSON raw
-        print("Dati ricevuti:", data)  # logga sempre (utile su Render)
+        raw_data = await request.json()
+        print("Dati ricevuti:", raw_data)  # già ce l'hai, tienilo
 
-        # Se è il test di Forminator → restituisci subito OK senza validare
-        if not data or len(data) < 3:  # payload vuoto o molto piccolo → è il test
-            return {"status": "test_ok", "message": "Webhook test ricevuto correttamente"}
+        # Riconosci il payload di TEST di Forminator
+        if (
+            "number_1" in raw_data
+            and "number_2" in raw_data
+            and "number_3" in raw_data
+            and "number_4" in raw_data
+            and "form_title" in raw_data
+            and "entry_time" in raw_data
+        ):
+            # È il test → rispondi sempre OK senza validare
+            print("Rilevato TEST di Forminator → risposta positiva")
+            return {
+                "status": "success",
+                "message": "Webhook test ricevuto correttamente",
+                "test": True
+            }
 
-        # Altrimenti prova a validare come FormData reale
-        try:
-            validated = FormData(**data)
-        except Exception as e:
-            raise HTTPException(422, f"Dati non validi: {str(e)}")
+        # Altrimenti è un invio reale → valida normalmente
+        validated = FormData(**raw_data)
 
         df_input = pd.DataFrame([validated.dict()])
         pred = model.predict(df_input)[0]
@@ -49,7 +59,11 @@ async def predict(request: Request):  # ← Usa Request invece di FormData fisso
         aree = {0: "scientifico", 1: "umanistico", 2: "tecnico"}
         area_text = aree.get(pred, "indefinita")
 
-        livello = "alto" if validated.punteggio_mat >= 8 else "medio" if validated.punteggio_mat >= 5 else "da esplorare"
+        livello = (
+            "alto" if validated.punteggio_mat >= 8
+            else "medio" if validated.punteggio_mat >= 5
+            else "da esplorare"
+        )
 
         consiglio = f"Ti consigliamo **{area_text.upper()}**! "
         if validated.paura == 1:
@@ -64,5 +78,5 @@ async def predict(request: Request):  # ← Usa Request invece di FormData fisso
         }
 
     except Exception as e:
-        print("Errore:", str(e))  # logga l'errore
-        raise HTTPException(500, str(e))
+        print("Errore:", str(e))
+        raise HTTPException(500, detail=str(e))
